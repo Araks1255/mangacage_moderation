@@ -1,0 +1,76 @@
+package teams
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/Araks1255/mangacage/pkg/common/models/dto"
+	"github.com/gin-gonic/gin"
+)
+
+type getTeamsPoolParams struct {
+	dto.CommonParams
+
+	CreatorID      *uint  `form:"creatorId"`
+	ModerationType string `form:"type"`
+}
+
+func (h handler) GetTeamsPool(c *gin.Context) {
+	var params getTeamsPoolParams
+
+	if err := c.ShouldBindQuery(&params); err != nil {
+		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	offset := (params.Page - 1) * int(params.Limit)
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := h.DB.Table("teams_on_moderation").
+		Where("moderator_id IS NULL").
+		Offset(offset).
+		Limit(int(params.Limit))
+
+	if params.Query != nil {
+		query = query.Where("lower(name) ILIKE lower(?)", fmt.Sprintf("%%%s%%", *params.Query))
+	}
+
+	if params.CreatorID != nil {
+		query = query.Where("creator_id = ?", params.CreatorID)
+	}
+
+	if params.ModerationType == "new" {
+		query = query.Where("existing_id IS NULL")
+	}
+	if params.ModerationType == "edited" {
+		query = query.Where("existing_id IS NOT NULL")
+	}
+
+	if params.Order != "desc" && params.Order != "asc" {
+		params.Order = "desc"
+	}
+
+	switch params.Sort {
+	case "createdAt":
+		query = query.Order(fmt.Sprintf("id %s", params.Order))
+	default:
+		query = query.Order(fmt.Sprintf("name %s", params.Order))
+	}
+
+	var result []dto.ResponseTeamDTO
+
+	if err := query.Scan(&result).Error; err != nil {
+		log.Println(err)
+		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(result) == 0 {
+		c.AbortWithStatusJSON(404, gin.H{"error": "по вашему запросу ничего не найдено"})
+		return
+	}
+
+	c.JSON(200, &result)
+}
