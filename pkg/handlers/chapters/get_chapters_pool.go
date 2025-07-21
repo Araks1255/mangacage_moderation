@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/Araks1255/mangacage/pkg/common/models/dto"
+	moderationDTO "github.com/Araks1255/mangacage_moderation/pkg/common/dto"
 	"github.com/gin-gonic/gin"
 )
 
@@ -89,7 +90,7 @@ func (h handler) GetChaptersPool(c *gin.Context) {
 		query = query.Order(fmt.Sprintf("com.name %s", params.Order))
 	}
 
-	var result []dto.ResponseChapterDTO
+	var result []moderationDTO.ChapterOnModerationDTO
 
 	if err := query.Scan(&result).Error; err != nil {
 		log.Println(err)

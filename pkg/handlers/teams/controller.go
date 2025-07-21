@@ -20,10 +20,10 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 		TeamsCovers: teamsCoversCollection,
 	}
 
-	teams := r.Group("/moderation/api/teams")
+	teamsOnModeration := r.Group("/moderation/api/teams-on-moderation")
 	{
-		teams.GET("", h.GetTeamsPool)
-		teams.POST("/:id", h.ApproveTeam)
-		teams.DELETE("/:id", h.DeclineTeam)
+		teamsOnModeration.GET("", h.GetTeamsPool)
+		teamsOnModeration.POST("/:id", h.ApproveTeam)
+		teamsOnModeration.DELETE("/:id", h.DeclineTeam)
 	}
 }

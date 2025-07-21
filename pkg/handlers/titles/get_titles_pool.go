@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/Araks1255/mangacage/pkg/common/models/dto"
+	moderationDTO "github.com/Araks1255/mangacage_moderation/pkg/common/dto"
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 )
@@ -124,7 +125,7 @@ func (h handler) GetTitlesPool(c *gin.Context) {
 		query = query.Order(fmt.Sprintf("tom.name %s", params.Order))
 	}
 
-	var result []dto.ResponseTitleDTO
+	var result []moderationDTO.TitleOnModerationDTO
 
 	if err := query.Scan(&result).Error; err != nil {
 		log.Println(err)

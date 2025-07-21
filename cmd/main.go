@@ -5,7 +5,10 @@ import (
 
 	"github.com/Araks1255/mangacage/pkg/middlewares"
 	"github.com/Araks1255/mangacage_moderation/pkg/common/db"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/authors"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/chapters"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/genres"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/tags"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/teams"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/titles"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/users"
@@ -41,6 +44,9 @@ func main() {
 	titles.RegisterRoutes(db, mongoClient, secretKey, router)
 	teams.RegisterRoutes(db, mongoClient, secretKey, router)
 	users.RegisterRoutes(db, mongoClient, secretKey, router)
+	tags.RegisterRoutes(db, secretKey, router)
+	genres.RegisterRoutes(db, secretKey, router)
+	authors.RegisterRoutes(db, secretKey, router)
 
 	router.Run(":8080")
 }

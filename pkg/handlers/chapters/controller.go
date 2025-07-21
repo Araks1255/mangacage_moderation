@@ -20,10 +20,10 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 		ChaptersPages: chaptersPagesCollection,
 	}
 
-	chapters := r.Group("/moderation/api/chapters")
+	chaptersOnModeration := r.Group("/moderation/api/chapters-on-moderation")
 	{
-		chapters.POST("/:id", h.ApproveChapter)
-		chapters.DELETE("/:id", h.DeclineChapter)
-		chapters.GET("/", h.GetChaptersPool)
+		chaptersOnModeration.POST("/:id", h.ApproveChapter)
+		chaptersOnModeration.DELETE("/:id", h.DeclineChapter)
+		chaptersOnModeration.GET("/", h.GetChaptersPool)
 	}
 }

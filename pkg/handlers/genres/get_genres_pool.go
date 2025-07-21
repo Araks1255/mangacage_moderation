@@ -1,4 +1,4 @@
-package teams
+package genres
 
 import (
 	"fmt"
@@ -9,15 +9,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type getTeamsPoolParams struct {
+type getGenresPoolParams struct {
 	dto.CommonParams
 
-	CreatorID      *uint  `form:"creatorId"`
-	ModerationType string `form:"type"`
+	CreatorID *uint `form:"creatorId"`
 }
 
-func (h handler) GetTeamsPool(c *gin.Context) {
-	var params getTeamsPoolParams
+func (h handler) GetGenresPool(c *gin.Context) {
+	var params getGenresPoolParams
 
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
@@ -29,7 +28,7 @@ func (h handler) GetTeamsPool(c *gin.Context) {
 		offset = 0
 	}
 
-	query := h.DB.Table("teams_on_moderation").
+	query := h.DB.Table("genres_on_moderation").
 		Where("moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))
@@ -40,13 +39,6 @@ func (h handler) GetTeamsPool(c *gin.Context) {
 
 	if params.CreatorID != nil {
 		query = query.Where("creator_id = ?", params.CreatorID)
-	}
-
-	if params.ModerationType == "new" {
-		query = query.Where("existing_id IS NULL")
-	}
-	if params.ModerationType == "edited" {
-		query = query.Where("existing_id IS NOT NULL")
 	}
 
 	if params.Order != "desc" && params.Order != "asc" {
@@ -60,7 +52,7 @@ func (h handler) GetTeamsPool(c *gin.Context) {
 		query = query.Order(fmt.Sprintf("name %s", params.Order))
 	}
 
-	var result []moderationDTO.TeamOnModerationDTO
+	var result []moderationDTO.GenreOnModerationDTO
 
 	if err := query.Scan(&result).Error; err != nil {
 		log.Println(err)

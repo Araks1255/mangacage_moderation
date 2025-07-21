@@ -1,25 +1,17 @@
-package teams
+package users
 
 import (
 	"fmt"
 	"log"
 
 	"github.com/Araks1255/mangacage/pkg/common/models/dto"
-	moderationDTO "github.com/Araks1255/mangacage_moderation/pkg/common/dto"
 	"github.com/gin-gonic/gin"
 )
 
-type getTeamsPoolParams struct {
-	dto.CommonParams
+func (h handler) GetUsersProfileChangesPool(c *gin.Context) {
+	var params dto.CommonParams
 
-	CreatorID      *uint  `form:"creatorId"`
-	ModerationType string `form:"type"`
-}
-
-func (h handler) GetTeamsPool(c *gin.Context) {
-	var params getTeamsPoolParams
-
-	if err := c.ShouldBindQuery(&params); err != nil {
+	if err := c.ShouldBindJSON(&params); err != nil {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -29,24 +21,14 @@ func (h handler) GetTeamsPool(c *gin.Context) {
 		offset = 0
 	}
 
-	query := h.DB.Table("teams_on_moderation").
+	query := h.DB.Table("users_on_moderation").
+		Select("*").
 		Where("moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))
 
 	if params.Query != nil {
-		query = query.Where("lower(name) ILIKE lower(?)", fmt.Sprintf("%%%s%%", *params.Query))
-	}
-
-	if params.CreatorID != nil {
-		query = query.Where("creator_id = ?", params.CreatorID)
-	}
-
-	if params.ModerationType == "new" {
-		query = query.Where("existing_id IS NULL")
-	}
-	if params.ModerationType == "edited" {
-		query = query.Where("existing_id IS NOT NULL")
+		query = query.Where("lower(user_name) ILIKE lower(?)", fmt.Sprintf("%%%s%%", *params.Query))
 	}
 
 	if params.Order != "desc" && params.Order != "asc" {
@@ -57,10 +39,10 @@ func (h handler) GetTeamsPool(c *gin.Context) {
 	case "createdAt":
 		query = query.Order(fmt.Sprintf("id %s", params.Order))
 	default:
-		query = query.Order(fmt.Sprintf("name %s", params.Order))
+		query = query.Order(fmt.Sprintf("name %s", *params.Query))
 	}
 
-	var result []moderationDTO.TeamOnModerationDTO
+	var result []dto.ResponseUserDTO
 
 	if err := query.Scan(&result).Error; err != nil {
 		log.Println(err)

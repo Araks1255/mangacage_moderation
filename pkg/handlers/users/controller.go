@@ -22,9 +22,17 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 
 	users := r.Group("/moderation/api/users")
 	{
-		users.GET("", h.GetUsersPool)
-		users.PATCH("/:id", h.VerificateUser)
-		users.POST("/:id", h.ApproveUserProfileChanges)
-		users.DELETE("/:id", h.DeclineUser)
+		usersOnVerification := users.Group("/on-verification")
+		{
+			usersOnVerification.GET("/", h.GetUsersOnVerificationPool)
+			usersOnVerification.PATCH("/:id", h.VerificateUser)
+		}
+
+		profileChanges := users.Group("/profile-changes")
+		{
+			profileChanges.POST("/:id", h.ApproveUserProfileChanges)
+			profileChanges.DELETE("/:id", h.DeclineUserProfileChanges)
+			profileChanges.GET("/", h.GetUsersProfileChangesPool)
+		}
 	}
 }
