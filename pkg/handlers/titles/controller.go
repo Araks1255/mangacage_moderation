@@ -22,9 +22,12 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 
 	titlesOnModeration := r.Group("/moderation/api/titles-on-moderation")
 	{
-		titlesOnModeration.GET("/", h.GetTitlesPool)
-		titlesOnModeration.POST("/:id", h.ApproveTitle)
-		titlesOnModeration.DELETE("/:id", h.DeclineTitle)
+		titlesOnModeration.GET("/", h.GetTitlesOnModerationPool)
+		titlesOnModeration.POST("/:id", h.ApproveTitleOnModeration)
+		titlesOnModeration.DELETE("/:id", h.DeclineTitleOnModeration)
+		titlesOnModeration.PATCH("/:id/review", h.ReviewTitleOnModeration)
+		titlesOnModeration.GET("/:id/cover", h.GetTitleOnModerationCover)
+		titlesOnModeration.GET("/reviewing-by-me", h.GetTitlesOnModerationReviewingByMe)
 	}
 
 	titles := r.Group("/moderation/api/titles")

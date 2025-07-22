@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h handler) ApproveTeam(c *gin.Context) {
+func (h handler) ApproveTeamOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	teamOnModerationID, err := strconv.ParseUint(c.Param("id"), 10, 64)

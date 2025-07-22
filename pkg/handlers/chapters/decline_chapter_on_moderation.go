@@ -14,10 +14,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h handler) DeclineChapter(c *gin.Context) {
+func (h handler) DeclineChapterOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
-	chapterOnModerationID, reason, err := parseDeclineChapterBody(c.ShouldBindJSON, c.Param)
+	chapterOnModerationID, reason, err := parseDeclineChapterOnModerationBody(c.ShouldBindJSON, c.Param)
 	if err != nil {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
 		return
@@ -49,7 +49,7 @@ func (h handler) DeclineChapter(c *gin.Context) {
 	log.Println(reason)
 }
 
-func parseDeclineChapterBody(bindFn func(any) error, paramFn func(string) string) (chapterID uint, reason string, err error) {
+func parseDeclineChapterOnModerationBody(bindFn func(any) error, paramFn func(string) string) (chapterID uint, reason string, err error) {
 	var requestBody struct {
 		Reason string `json:"reason" binding:"required"`
 	}

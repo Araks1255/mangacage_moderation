@@ -24,7 +24,7 @@ type getChaptersPoolParams struct {
 	ModerationType string `form:"type"`
 }
 
-func (h handler) GetChaptersPool(c *gin.Context) {
+func (h handler) GetChaptersOnModerationPool(c *gin.Context) {
 	var params getChaptersPoolParams
 
 	if err := c.ShouldBindQuery(&params); err != nil {

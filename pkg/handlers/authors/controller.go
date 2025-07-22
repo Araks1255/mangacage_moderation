@@ -16,8 +16,10 @@ func RegisterRoutes(db *gorm.DB, secretKey string, r *gin.Engine) {
 
 	authorsOnModeration := r.Group("/moderation/api/authors-on-moderation")
 	{
-		authorsOnModeration.GET("", h.GetAuthorsPool)
-		authorsOnModeration.POST("/:id", h.ApproveAuthor)
-		authorsOnModeration.DELETE("/:id", h.DeclineAuthor)
+		authorsOnModeration.GET("", h.GetAuthorsOnModerationPool)
+		authorsOnModeration.POST("/:id", h.ApproveAuthorOnModeration)
+		authorsOnModeration.DELETE("/:id", h.DeclineAuthorOnModeration)
+		authorsOnModeration.PATCH("/:id/review", h.ReviewAuthorOnModeration)
+		authorsOnModeration.GET("/reviewing-by-me", h.GetAuthorsOnModerationReviewingByMe)
 	}
 }

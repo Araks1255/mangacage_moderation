@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h handler) ApproveTag(c *gin.Context) {
+func (h handler) ApproveTagOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	tagOnModerationID, err := strconv.ParseUint(c.Param("id"), 10, 64)

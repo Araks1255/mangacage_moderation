@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (h handler) DeclineAuthor(c *gin.Context) {
+func (h handler) DeclineAuthorOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	authorOnModerationID, reason, err := parseDeclineAuthorBody(c.ShouldBindJSON, c.Param)

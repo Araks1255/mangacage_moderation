@@ -16,8 +16,10 @@ func RegisterRoutes(db *gorm.DB, secretKey string, r *gin.Engine) {
 
 	tagsOnModeration := r.Group("/moderation/api/tags-on-moderation")
 	{
-		tagsOnModeration.GET("", h.GetTagsPool)
-		tagsOnModeration.POST("/:id", h.ApproveTag)
-		tagsOnModeration.DELETE("/:id", h.DeclineTag)
+		tagsOnModeration.GET("", h.GetTagsOnModerationPool)
+		tagsOnModeration.POST("/:id", h.ApproveTagOnModeration)
+		tagsOnModeration.DELETE("/:id", h.DeclineTagOnModeration)
+		tagsOnModeration.PATCH("/:id/review", h.ReviewTagOnModeration)
+		tagsOnModeration.GET("/reviewing-by-me", h.GetTagsOnModerationReviewingByMe)
 	}
 }

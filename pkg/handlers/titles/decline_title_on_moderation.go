@@ -5,15 +5,15 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func (h handler) DeclineTitle(c *gin.Context) {
+func (h handler) DeclineTitleOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	titleOnModerationID, reason, err := parseDeclineTitleBody(c.ShouldBindJSON, c.Param)

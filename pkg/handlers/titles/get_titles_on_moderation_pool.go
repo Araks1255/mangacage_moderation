@@ -30,7 +30,7 @@ type getTitlesPoolParams struct {
 	CreatorID            *uint
 }
 
-func (h handler) GetTitlesPool(c *gin.Context) {
+func (h handler) GetTitlesOnModerationPool(c *gin.Context) {
 	var params getTitlesPoolParams
 
 	if err := c.ShouldBindQuery(&params); err != nil {

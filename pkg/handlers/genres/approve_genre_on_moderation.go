@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h handler) ApproveGenre(c *gin.Context) {
+func (h handler) ApproveGenreOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	genreOnModerationID, err := strconv.ParseUint(c.Param("id"), 10, 64)

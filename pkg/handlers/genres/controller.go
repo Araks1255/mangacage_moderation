@@ -16,8 +16,10 @@ func RegisterRoutes(db *gorm.DB, secretKey string, r *gin.Engine) {
 
 	genresOnModeration := r.Group("/moderation/api/genres-on-moderation")
 	{
-		genresOnModeration.GET("", h.GetGenresPool)
-		genresOnModeration.POST("/:id", h.ApproveGenre)
-		genresOnModeration.DELETE("/:id", h.DeclineGenre)
+		genresOnModeration.GET("", h.GetGenresOnModerationPool)
+		genresOnModeration.POST("/:id", h.ApproveGenreOnModeration)
+		genresOnModeration.DELETE("/:id", h.DeclineGenreOnModeration)
+		genresOnModeration.PATCH("/:id/review", h.ReviewGenreOnModeration)
+		genresOnModeration.GET("/reviewing-by-me", h.GetGenresOnModerationReviewingByMe)
 	}
 }

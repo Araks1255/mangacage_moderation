@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h handler) ApproveChapter(c *gin.Context) {
+func (h handler) ApproveChapterOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	chapterOnModerationID, err := strconv.ParseUint(c.Param("id"), 10, 64)

@@ -16,7 +16,7 @@ type getTeamsPoolParams struct {
 	ModerationType string `form:"type"`
 }
 
-func (h handler) GetTeamsPool(c *gin.Context) {
+func (h handler) GetTeamsOnModerationPool(c *gin.Context) {
 	var params getTeamsPoolParams
 
 	if err := c.ShouldBindQuery(&params); err != nil {

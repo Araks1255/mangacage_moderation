@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h handler) DeclineTeam(c *gin.Context) {
+func (h handler) DeclineTeamOnModeration(c *gin.Context) {
 	claims := c.MustGet("claims").(*auth.Claims)
 
 	teamOnModerationID, reason, err := parseDeclineTeamBody(c.ShouldBindJSON, c.Param)

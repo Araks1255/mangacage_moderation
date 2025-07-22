@@ -9,14 +9,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type getTagsPoolParams struct {
+type getTagsOnModerationPoolParams struct {
 	dto.CommonParams
 
 	CreatorID *uint `form:"creatorId"`
 }
 
-func (h handler) GetTagsPool(c *gin.Context) {
-	var params getTagsPoolParams
+func (h handler) GetTagsOnModerationPool(c *gin.Context) {
+	var params getTagsOnModerationPoolParams
 
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
