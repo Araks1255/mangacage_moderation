@@ -9,6 +9,7 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,7 +29,7 @@ func (h handler) ApproveTitle(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	titleOnModeration, code, err := popTitleOnModeration(tx, uint(titleOnModerationID), claims.ID)
+	titleOnModeration, code, err := getTitleOnModeration(tx, uint(titleOnModerationID), claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -38,21 +39,21 @@ func (h handler) ApproveTitle(c *gin.Context) {
 	}
 
 	if titleOnModeration.ExistingID == nil {
-		err := createTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
-		if err != nil {
-			log.Println(err)
-			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
-			return
-		}
+		err = createTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
+	} else {
+		err = updateTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
 	}
 
-	if titleOnModeration.ExistingID != nil {
-		err := updateTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
-		if err != nil {
-			log.Println(err)
-			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
-			return
-		}
+	if err != nil {
+		log.Println(err)
+		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := titles.DeleteTitleOnModeration(tx, uint(titleOnModerationID), claims.ID); err != nil {
+		log.Println(err)
+		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
+		return
 	}
 
 	tx.Commit()
@@ -61,11 +62,11 @@ func (h handler) ApproveTitle(c *gin.Context) {
 	// Уведомление
 }
 
-func popTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (chapter *models.TitleOnModeration, code int, err error) {
+func getTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (chapter *models.TitleOnModeration, code int, err error) {
 	var result models.TitleOnModeration
 
 	err = db.Raw(
-		"DELETE FROM titles_on_moderation WHERE id = ? AND moderator_id = ? RETURNING *",
+		"SELECT * FROM titles_on_moderation WHERE id = ? AND moderator_id = ?",
 		titleOnModerationID, userID,
 	).Scan(&result).Error
 
@@ -94,6 +95,25 @@ func createTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection,
 	err = replaceTitleCoverTitleOnModerationID(ctx, collection, titleOnModeration.ID, newTitleID)
 
 	if err != nil {
+		return err
+	}
+
+	err = replaceChaptersOnModerationTitleOnModerationID(db, titleOnModeration.ID, newTitleID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updateTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) error {
+	title := titleOnModeration.ToTitle()
+
+	if err := db.Model("titles_on_moderation").Updates(&title).Error; err != nil {
+		return err
+	}
+
+	if err := updateTitleCover(ctx, collection, titleOnModeration.ID, *titleOnModeration.ExistingID); err != nil {
 		return err
 	}
 
@@ -131,18 +151,15 @@ func replaceTitleCoverTitleOnModerationID(ctx context.Context, collection *mongo
 	return nil
 }
 
-func updateTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) error {
-	title := titleOnModeration.ToTitle()
-
-	if err := db.Model("titles_on_moderation").Updates(&title).Error; err != nil {
-		return err
-	}
-
-	if err := updateTitleCover(ctx, collection, titleOnModeration.ID, *titleOnModeration.ExistingID); err != nil {
-		return err
-	}
-
-	return nil
+func replaceChaptersOnModerationTitleOnModerationID(db *gorm.DB, titleOnModerationID, titleID uint) error {
+	return db.Exec(
+		`UPDATE chapters_on_moderation SET
+			title_id = ?,
+			title_on_moderation_id = NULL
+		WHERE
+			title_on_moderation_id = ?`,
+		titleID, titleOnModerationID,
+	).Error
 }
 
 func updateTitleCover(ctx context.Context, collection *mongo.Collection, titleOnModerationID, titleID uint) error {

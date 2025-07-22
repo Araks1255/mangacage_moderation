@@ -1,13 +1,12 @@
 package authors
 
 import (
-	"errors"
 	"log"
 	"strconv"
 
 	"github.com/Araks1255/mangacage/pkg/auth"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/authors"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 func (h handler) DeclineAuthor(c *gin.Context) {
@@ -19,7 +18,7 @@ func (h handler) DeclineAuthor(c *gin.Context) {
 		return
 	}
 
-	code, err := deleteAuthorOnModeration(h.DB, authorOnModerationID, claims.ID)
+	code, err := authors.DeleteAuthorOnModeration(h.DB, authorOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -48,21 +47,4 @@ func parseDeclineAuthorBody(bindFn func(any) error, paramFn func(string) string)
 	}
 
 	return uint(id), requestBody.Reason, nil
-}
-
-func deleteAuthorOnModeration(db *gorm.DB, authorOnModerationID, userID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM authors_on_moderation WHERE id = ? AND moderator_id = ?",
-		authorOnModerationID, userID,
-	)
-
-	if result.Error != nil {
-		return 500, result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return 404, errors.New("автор на модерации не найден среди рассматриваемых вами")
-	}
-
-	return 0, nil
 }

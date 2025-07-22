@@ -8,6 +8,7 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/authors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -25,7 +26,7 @@ func (h handler) ApproveAuthor(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	authorOnModeration, code, err := popAuthorOnModeration(tx, uint(authorOnModerationID), claims.ID)
+	authorID, code, err := createAuthorFromAuthorOnModerationByID(tx, uint(authorOnModerationID), claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -34,7 +35,14 @@ func (h handler) ApproveAuthor(c *gin.Context) {
 		return
 	}
 
-	if err := createAuthor(tx, authorOnModeration.ToAuthor()); err != nil {
+	err = replaceTitlesOnModerationAuthorOnModerationID(tx, uint(authorOnModerationID), authorID)
+	if err != nil {
+		log.Println(err)
+		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := authors.DeleteAuthorOnModeration(tx, uint(authorOnModerationID), claims.ID); err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 		return
@@ -46,25 +54,38 @@ func (h handler) ApproveAuthor(c *gin.Context) {
 	// Уведомление
 }
 
-func popAuthorOnModeration(db *gorm.DB, authorOnModerationID, userID uint) (author *models.AuthorOnModeration, code int, err error) {
-	var result models.AuthorOnModeration
+func createAuthorFromAuthorOnModerationByID(db *gorm.DB, authorOnModerationID, moderatorID uint) (authorID uint, code int, err error) {
+	var authorOnModeration models.AuthorOnModeration
 
 	err = db.Raw(
-		"DELETE FROM authors_on_moderation WHERE id = ? AND moderator_id = ?",
-		authorOnModerationID, userID,
-	).Scan(&result).Error
+		"SELECT * FROM authors_on_moderation WHERE id = ? AND moderator_id = ?",
+		authorOnModerationID, moderatorID,
+	).Scan(&authorOnModeration).Error
 
 	if err != nil {
-		return nil, 500, err
+		return 0, 500, err
 	}
 
-	if result.ID == 0 {
-		return nil, 404, errors.New("автор на модерации не найден среди заявок под вашим рассмотрением")
+	if authorOnModeration.ID == 0 {
+		return 0, 404, errors.New("автор на модерации не найден среди рассматриваемых вами")
 	}
 
-	return &result, 0, nil
+	newAuthor := authorOnModeration.ToAuthor()
+
+	if err := db.Create(&newAuthor).Error; err != nil {
+		return 0, 500, err
+	}
+
+	return newAuthor.ID, 0, nil
 }
 
-func createAuthor(db *gorm.DB, author models.Author) error {
-	return db.Create(&author).Error
+func replaceTitlesOnModerationAuthorOnModerationID(db *gorm.DB, authorOnModerationID, authorID uint) error {
+	return db.Exec(
+		`UPDATE titles_on_moderation SET
+			author_id = ?,
+			author_on_moderation_id = NULL
+		WHERE
+			author_on_moderation_id = ?`,
+		authorID, authorOnModerationID,
+	).Error
 }

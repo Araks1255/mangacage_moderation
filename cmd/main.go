@@ -38,7 +38,8 @@ func main() {
 	}
 
 	router := gin.Default()
-	router.Use(middlewares.Auth(secretKey), middlewares.RequireRoles(db, []string{"moderator", "admin"}))
+	moderation := router.Group("/moderation")
+	moderation.Use(middlewares.Auth(secretKey), middlewares.RequireRoles(db, []string{"moderator", "admin"}))
 
 	chapters.RegisterRoutes(db, mongoClient, secretKey, router)
 	titles.RegisterRoutes(db, mongoClient, secretKey, router)

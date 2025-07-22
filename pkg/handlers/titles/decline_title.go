@@ -2,16 +2,15 @@ package titles
 
 import (
 	"context"
-	"errors"
 	"log"
 	"strconv"
 
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"gorm.io/gorm"
 )
 
 func (h handler) DeclineTitle(c *gin.Context) {
@@ -27,7 +26,7 @@ func (h handler) DeclineTitle(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	code, err := deleteTitleOnModeration(tx, titleOnModerationID, claims.ID)
+	code, err := titles.DeleteTitleOnModeration(tx, titleOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -64,23 +63,6 @@ func parseDeclineTitleBody(bindFn func(any) error, paramFn func(string) string) 
 	}
 
 	return uint(id), requestBody.Reason, nil
-}
-
-func deleteTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM titles_on_moderation WHERE id = ? AND moderator_id = ?",
-		titleOnModerationID, userID,
-	)
-
-	if result.Error != nil {
-		return 500, result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return 404, errors.New("тайтл на модерации не найден среди рассматриваемых вами")
-	}
-
-	return 0, nil
 }
 
 func deleteTitleCover(ctx context.Context, collection *mongo.Collection, titleOnModerationID uint) error {

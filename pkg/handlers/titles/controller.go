@@ -26,4 +26,10 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 		titlesOnModeration.POST("/:id", h.ApproveTitle)
 		titlesOnModeration.DELETE("/:id", h.DeclineTitle)
 	}
+
+	titles := r.Group("/moderation/api/titles")
+	{
+		titles.PATCH("/:id/hide", h.HideTitle)
+		titles.PATCH("/:id/unhide", h.UnhideTitle)
+	}
 }
