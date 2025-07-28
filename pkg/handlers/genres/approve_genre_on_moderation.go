@@ -50,7 +50,7 @@ func popGenreOnModeration(db *gorm.DB, genreOnModerationID, userID uint) (genre 
 	var result models.GenreOnModeration
 
 	err = db.Raw(
-		"DELETE FROM genres_on_moderation WHERE id = ? AND moderator_id = ?",
+		"DELETE FROM genres_on_moderation WHERE id = ? AND moderator_id = ? RETURNING *",
 		genreOnModerationID, userID,
 	).Scan(&result).Error
 

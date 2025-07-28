@@ -13,7 +13,11 @@ func (h handler) GetChaptersOnModerationReviewingByMe(c *gin.Context) {
 
 	var result []dto.ChapterOnModerationDTO
 
-	err := h.DB.Raw("SELECT * FROM chapters_on_moderation WHERE moderator_id = ? ORDER BY id ASC", claims.ID).Scan(&result).Error
+	err := h.DB.Table("chapters_on_moderation").
+		Select("id, name, title_id, title_on_moderation_id").
+		Where("moderator_id = ?", claims.ID).
+		Scan(&result).Error
+
 	if err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})

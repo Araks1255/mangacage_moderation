@@ -38,8 +38,9 @@ func (h handler) GetChaptersOnModerationPool(c *gin.Context) {
 	}
 
 	query := h.DB.Table("chapters_on_moderation AS com").
-		Select("com.*, teams.name AS team").
-		Joins("LEFT JOIN teams ON com.team_id = teams.id").
+		Select("com.id, com.name, com.title_id, com.title_on_moderation_id, t.name AS title, tom.name AS title_on_moderation").
+		Joins("LEFT JOIN titles AS t ON com.title_id = t.id").
+		Joins("LEFT JOIN titles_on_moderation AS tom ON com.title_on_moderation_id = tom.id").
 		Where("com.moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))

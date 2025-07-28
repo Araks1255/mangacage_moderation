@@ -27,7 +27,7 @@ type getTitlesPoolParams struct {
 
 	AuthorID             *uint `form:"authorId"`
 	AuthorOnModerationID *uint `form:"authorOnModerationId"`
-	CreatorID            *uint
+	CreatorID            *uint `form:"creatorId"`
 }
 
 func (h handler) GetTitlesOnModerationPool(c *gin.Context) {
@@ -44,8 +44,8 @@ func (h handler) GetTitlesOnModerationPool(c *gin.Context) {
 	}
 
 	query := h.DB.Table("titles_on_moderation AS tom").
-		Select("tom.*, teams.name AS team").
-		Joins("INNER JOIN teams ON teams.id = tom.team_id").
+		Select("tom.*, u.user_name AS creator").
+		Joins("INNER JOIN users AS u ON u.id = tom.creator_id").
 		Where("tom.moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))

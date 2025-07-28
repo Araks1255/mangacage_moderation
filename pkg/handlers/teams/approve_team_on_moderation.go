@@ -9,9 +9,11 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	mongoModels "github.com/Araks1255/mangacage/pkg/common/models/mongo"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
 
@@ -64,7 +66,7 @@ func popTeamOnModeration(db *gorm.DB, teamOnModerationID, userID uint) (team *mo
 	var result models.TeamOnModeration
 
 	err = db.Raw(
-		"DELETE FROM teams_on_moderation WHERE id = ? AND moderator_id = ?",
+		"DELETE FROM teams_on_moderation WHERE id = ? AND moderator_id = ? RETURNING *",
 		teamOnModerationID, userID,
 	).Scan(&result).Error
 
@@ -96,6 +98,20 @@ func createTeam(ctx context.Context, db *gorm.DB, collection *mongo.Collection, 
 	return nil
 }
 
+func updateTeam(ctx context.Context, db *gorm.DB, collection *mongo.Collection, teamOnModeration models.TeamOnModeration) error {
+	team := teamOnModeration.ToTeam()
+
+	if err := db.Table("teams").Where("id = ?", teamOnModeration.ExistingID).Updates(&team).Error; err != nil {
+		return err
+	}
+
+	if err := updateTeamCover(ctx, collection, teamOnModeration.ID, *teamOnModeration.ExistingID, teamOnModeration.CreatorID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func insertTeam(db *gorm.DB, team models.Team) (uint, error) {
 	err := db.Create(&team).Error
 
@@ -113,7 +129,7 @@ func makeUserTeamLeader(db *gorm.DB, userID, teamID uint) error {
 		return err
 	}
 
-	err = db.Exec("INSERT INTO user_roles (user_id, role_id) SELECT ? (SELECT id FROM roles WHERE name = 'team_leader')", userID).Error
+	err = db.Exec("INSERT INTO user_roles (user_id, role_id) SELECT ?, (SELECT id FROM roles WHERE name = 'team_leader')", userID).Error
 
 	if err != nil {
 		return err
@@ -143,38 +159,40 @@ func replaceTeamCoverTeamOnModerationID(ctx context.Context, collection *mongo.C
 	return nil
 }
 
-func updateTeam(ctx context.Context, db *gorm.DB, collection *mongo.Collection, teamOnModeration models.TeamOnModeration) error {
-	if err := db.Model("teams_on_moderation").Updates(&teamOnModeration).Error; err != nil {
+func updateTeamCover(ctx context.Context, collection *mongo.Collection, teamOnModerationID, teamID, creatorID uint) error {
+	teamOnModerationFilter := bson.M{"team_on_moderation_id": teamOnModerationID}
+
+	var cover mongoModels.TeamOnModerationCover
+
+	if err := collection.FindOne(ctx, teamOnModerationFilter).Decode(cover); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil
+		}
 		return err
 	}
 
-	if err := updateTeamCover(ctx, collection, teamOnModeration.ID, *teamOnModeration.ExistingID); err != nil {
-		return err
-	}
+	teamFilter := bson.M{"team_id": teamID}
+	teamUpdate := bson.M{"$set": bson.M{"cover": cover.Cover, "creator_id": creatorID}}
+	teamOpts := options.Update().SetUpsert(true)
 
-	return nil
-}
-
-func updateTeamCover(ctx context.Context, collection *mongo.Collection, teamOnModerationID, teamID uint) error {
-	filter := bson.M{"team_id": teamID}
-	if _, err := collection.DeleteOne(ctx, filter); err != nil {
-		return err
-	}
-
-	filter = bson.M{"team_on_moderation_id": teamOnModerationID}
-	update := bson.M{
-		"$set":   bson.M{"team_id": teamID},
-		"$unset": bson.M{"team_on_moderation_id": teamOnModerationID},
-	}
-
-	res, err := collection.UpdateOne(ctx, filter, update)
+	res, err := collection.UpdateOne(ctx, teamFilter, teamUpdate, teamOpts)
 
 	if err != nil {
 		return err
 	}
 
 	if res.ModifiedCount == 0 {
-		return nil
+		log.Printf("не удалось обновить обложку команды.\nid команды: %d\nid команды на модерации: %d", teamID, teamOnModerationID)
+	}
+
+	deleteRes, err := collection.DeleteOne(ctx, teamOnModerationFilter)
+
+	if err != nil {
+		log.Printf("не удалось удалить обложку команды на модерации.\nошибка: %s\nid: %d", err.Error(), teamOnModerationID)
+	}
+
+	if deleteRes.DeletedCount == 0 {
+		log.Printf("не удалось удалить обложку команды на модерации.\nid: %d", teamOnModerationID)
 	}
 
 	return nil

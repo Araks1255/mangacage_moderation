@@ -13,7 +13,7 @@ func (h handler) GetTagsOnModerationReviewingByMe(c *gin.Context) {
 
 	var result []dto.TagOnModerationDTO
 
-	err := h.DB.Raw("SELECT * FROM tags_on_moderation WHERE moderator_id = ? ORDER BY id ASC", claims.ID).Scan(&result).Error
+	err := h.DB.Raw("SELECT id, name FROM tags_on_moderation WHERE moderator_id = ? ORDER BY id ASC", claims.ID).Scan(&result).Error
 	if err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})

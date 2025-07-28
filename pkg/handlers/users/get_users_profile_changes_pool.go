@@ -11,7 +11,7 @@ import (
 func (h handler) GetUsersProfileChangesPool(c *gin.Context) {
 	var params dto.CommonParams
 
-	if err := c.ShouldBindJSON(&params); err != nil {
+	if err := c.ShouldBindQuery(&params); err != nil {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -22,7 +22,7 @@ func (h handler) GetUsersProfileChangesPool(c *gin.Context) {
 	}
 
 	query := h.DB.Table("users_on_moderation").
-		Select("*").
+		Select("id, user_name").
 		Where("moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))

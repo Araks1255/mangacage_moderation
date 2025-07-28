@@ -28,6 +28,7 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 		titlesOnModeration.PATCH("/:id/review", h.ReviewTitleOnModeration)
 		titlesOnModeration.GET("/:id/cover", h.GetTitleOnModerationCover)
 		titlesOnModeration.GET("/reviewing-by-me", h.GetTitlesOnModerationReviewingByMe)
+		titlesOnModeration.GET("/:id", h.GetTitleOnModeraiton)
 	}
 
 	titles := r.Group("/moderation/api/titles")

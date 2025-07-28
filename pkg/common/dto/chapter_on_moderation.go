@@ -5,6 +5,6 @@ import "github.com/Araks1255/mangacage/pkg/common/models/dto"
 type ChapterOnModerationDTO struct {
 	dto.ResponseChapterDTO
 
-	CreatorID uint   `json:"creatorId"`
-	Creator   string `json:"creator"`
+	CreatorID uint   `json:"creatorId,omitempty"`
+	Creator   string `json:"creator,omitempty"`
 }

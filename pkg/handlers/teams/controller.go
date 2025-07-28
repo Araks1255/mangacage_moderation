@@ -28,5 +28,6 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 		teamsOnModeration.PATCH("/:id/review", h.ReviewTeamOnModeration)
 		teamsOnModeration.GET("/:id/cover", h.GetTeamOnModerationCover)
 		teamsOnModeration.GET("/reviewing-by-me", h.GetTeamsOnModerationReviewingByMe)
+		teamsOnModeration.GET("/:id", h.GetTeamOnModeration)
 	}
 }

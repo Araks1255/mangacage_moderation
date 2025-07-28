@@ -21,5 +21,6 @@ func RegisterRoutes(db *gorm.DB, secretKey string, r *gin.Engine) {
 		authorsOnModeration.DELETE("/:id", h.DeclineAuthorOnModeration)
 		authorsOnModeration.PATCH("/:id/review", h.ReviewAuthorOnModeration)
 		authorsOnModeration.GET("/reviewing-by-me", h.GetAuthorsOnModerationReviewingByMe)
+		authorsOnModeration.GET("/:id", h.GetAuthorOnModeration)
 	}
 }

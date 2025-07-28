@@ -45,7 +45,7 @@ func (h handler) ApproveChapterOnModeration(c *gin.Context) {
 			return
 		}
 
-		err = replaceChapterPagesChapterOnModerationID(c.Request.Context(), h.ChaptersPages, chapterOnModeration.ID, newChapterID)
+		err = replaceChapterPagesChapterOnModerationID(c.Request.Context(), h.ChaptersPages, chapterOnModeration.ID, newChapterID, chapterOnModeration.CreatorID)
 		if err != nil {
 			log.Println(err)
 			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
@@ -104,11 +104,11 @@ func updateChapter(db *gorm.DB, chapter models.Chapter) error {
 	return db.Model("chapters_on_moderation").Updates(&chapter).Error
 }
 
-func replaceChapterPagesChapterOnModerationID(ctx context.Context, collection *mongo.Collection, chapterOnModerationID, chapterID uint) error {
+func replaceChapterPagesChapterOnModerationID(ctx context.Context, collection *mongo.Collection, chapterOnModerationID, chapterID, creatorID uint) error {
 	filter := bson.M{"chapter_on_moderation_id": chapterOnModerationID}
 
 	update := bson.M{
-		"$set":   bson.M{"chapter_id": chapterID},
+		"$set":   bson.M{"chapter_id": chapterID, "creator_id": creatorID},
 		"$unset": bson.M{"chapter_on_moderation_id": ""},
 	}
 

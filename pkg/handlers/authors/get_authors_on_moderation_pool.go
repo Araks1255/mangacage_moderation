@@ -29,6 +29,7 @@ func (h handler) GetAuthorsOnModerationPool(c *gin.Context) {
 	}
 
 	query := h.DB.Table("authors_on_moderation").
+		Select("id, name").
 		Where("moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))

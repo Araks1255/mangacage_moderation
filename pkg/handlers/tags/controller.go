@@ -21,5 +21,6 @@ func RegisterRoutes(db *gorm.DB, secretKey string, r *gin.Engine) {
 		tagsOnModeration.DELETE("/:id", h.DeclineTagOnModeration)
 		tagsOnModeration.PATCH("/:id/review", h.ReviewTagOnModeration)
 		tagsOnModeration.GET("/reviewing-by-me", h.GetTagsOnModerationReviewingByMe)
+		tagsOnModeration.GET("/:id", h.GetTagOnModeration)
 	}
 }

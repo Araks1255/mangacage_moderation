@@ -13,7 +13,7 @@ func (h handler) GetUsersOnVerificationReviewingByMe(c *gin.Context) {
 
 	var result []dto.ResponseUserDTO
 
-	err := h.DB.Raw("SELECT * FROM users WHERE NOT verificated AND moderator_id = ? ORDER BY id ASC", claims.ID).Scan(&result).Error
+	err := h.DB.Raw("SELECT id, user_name FROM users WHERE NOT verificated AND moderator_id = ? ORDER BY id ASC", claims.ID).Scan(&result).Error
 	if err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})

@@ -3,16 +3,19 @@ package titles
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	mongoModels "github.com/Araks1255/mangacage/pkg/common/models/mongo"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
 
@@ -62,7 +65,7 @@ func (h handler) ApproveTitleOnModeration(c *gin.Context) {
 	// Уведомление
 }
 
-func getTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (chapter *models.TitleOnModeration, code int, err error) {
+func getTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (title *models.TitleOnModeration, code int, err error) {
 	var result models.TitleOnModeration
 
 	err = db.Raw(
@@ -87,19 +90,27 @@ func getTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (chapte
 
 func createTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) error {
 	newTitleID, err := insertTitle(db, titleOnModeration.ToTitle())
-
 	if err != nil {
 		return err
 	}
 
-	err = replaceTitleCoverTitleOnModerationID(ctx, collection, titleOnModeration.ID, newTitleID)
-
-	if err != nil {
+	if err = setTitleGenresFromTitleOnModeration(db, newTitleID, titleOnModeration.ID); err != nil {
 		return err
 	}
 
-	err = replaceChaptersOnModerationTitleOnModerationID(db, titleOnModeration.ID, newTitleID)
-	if err != nil {
+	if err := setTitleTagsFromTitleOnModeration(db, newTitleID, titleOnModeration.ID); err != nil {
+		return err
+	}
+
+	if err = replaceChaptersOnModerationTitleOnModerationID(db, titleOnModeration.ID, newTitleID); err != nil {
+		return err
+	}
+
+	if err := makeTitleTranslatingByCreatorTeam(db, newTitleID, titleOnModeration.CreatorID); err != nil {
+		return err
+	}
+
+	if err = replaceTitleCoverTitleOnModerationID(ctx, collection, titleOnModeration.ID, newTitleID); err != nil {
 		return err
 	}
 
@@ -109,11 +120,11 @@ func createTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection,
 func updateTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) error {
 	title := titleOnModeration.ToTitle()
 
-	if err := db.Model("titles_on_moderation").Updates(&title).Error; err != nil {
+	if err := db.Table("titles").Where("id = ?", titleOnModeration.ExistingID).Updates(&title).Error; err != nil {
 		return err
 	}
 
-	if err := updateTitleCover(ctx, collection, titleOnModeration.ID, *titleOnModeration.ExistingID); err != nil {
+	if err := updateTitleCover(ctx, collection, titleOnModeration.ID, *titleOnModeration.ExistingID, titleOnModeration.CreatorID); err != nil {
 		return err
 	}
 
@@ -162,26 +173,150 @@ func replaceChaptersOnModerationTitleOnModerationID(db *gorm.DB, titleOnModerati
 	).Error
 }
 
-func updateTitleCover(ctx context.Context, collection *mongo.Collection, titleOnModerationID, titleID uint) error {
-	filter := bson.M{"title_id": titleID}
-	if _, err := collection.DeleteOne(ctx, filter); err != nil {
+func makeTitleTranslatingByCreatorTeam(db *gorm.DB, titleID, creatorID uint) error {
+	return db.Exec(
+		`INSERT INTO title_teams
+			(title_id, team_id)
+		SELECT
+			?, teams.id
+		FROM
+			users AS u
+			INNER JOIN teams ON teams.id = u.team_id
+			INNER JOIN user_roles AS ur ON ur.user_id = u.id
+			INNER JOIN roles AS r ON r.id = ur.role_id
+		WHERE
+			u.id = ? AND r.name = 'team_leader'`,
+		titleID, creatorID,
+	).Error
+}
+
+func updateTitleCover(ctx context.Context, collection *mongo.Collection, titleOnModerationID, titleID, creatorID uint) error {
+	titleOnModerationFilter := bson.M{"title_on_moderation_id": titleOnModerationID}
+
+	var cover mongoModels.TitleOnModerationCover
+
+	if err := collection.FindOne(ctx, titleOnModerationFilter).Decode(&cover); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil
+		}
 		return err
 	}
 
-	filter = bson.M{"title_on_moderation_id": titleOnModerationID}
-	update := bson.M{
-		"$set":   bson.M{"title_id": titleID},
-		"$unset": bson.M{"title_on_moderation_id": titleOnModerationID},
-	}
+	titleFilter := bson.M{"title_id": titleID}
+	titleUpdate := bson.M{"$set": bson.M{"cover": cover.Cover, "creator_id": creatorID}}
+	titleOpts := options.Update().SetUpsert(true) // на всякий случай
 
-	res, err := collection.UpdateOne(ctx, filter, update)
+	res, err := collection.UpdateOne(ctx, titleFilter, titleUpdate, titleOpts)
 
 	if err != nil {
 		return err
 	}
 
 	if res.ModifiedCount == 0 {
+		log.Printf("не удалось изменить обложку тайтла.\nid тайтла: %d\nid тайтла на модерации: %d", titleID, titleOnModerationID)
+	}
+
+	delteRes, err := collection.DeleteOne(ctx, titleOnModerationFilter)
+
+	if err != nil {
+		log.Printf("не удалось удалить обложку тайтла на модерации.\nошибка: %s\nid: %d", err.Error(), titleOnModerationID)
+	}
+
+	if delteRes.DeletedCount == 0 {
+		log.Printf("не удалось удалить обложку тайтла на модерации. id: %d", titleOnModerationID)
+	}
+
+	return nil
+}
+
+func setTitleGenresFromTitleOnModeration(db *gorm.DB, titleID, titleOnModerationID uint) error {
+	var genresExist bool
+
+	err := db.Raw(
+		"SELECT EXISTS(SELECT 1 FROM title_on_moderation_genres WHERE title_on_moderation_id = ?)",
+		titleOnModerationID,
+	).Scan(&genresExist).Error
+
+	if err != nil {
+		return err
+	}
+
+	if !genresExist {
 		return nil
+	}
+
+	if err := db.Exec("DELETE FROM title_genres WHERE title_id = ?", titleID).Error; err != nil {
+		return err
+	}
+
+	result := db.Exec(
+		`INSERT INTO
+			title_genres (title_id, genre_id)
+		SELECT
+			?, genre_id
+		FROM
+			title_on_moderation_genres
+		WHERE
+			title_on_moderation_id = ?`,
+		titleID, titleOnModerationID,
+	)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf(
+			"не удалось перенести жанры тайтла на модерации созданному тайтлу.\nid тайтла на модерации - %d",
+			titleOnModerationID,
+		)
+	}
+
+	return nil
+}
+
+func setTitleTagsFromTitleOnModeration(db *gorm.DB, titleID, titleOnModerationID uint) error {
+	var tagsExist bool
+
+	err := db.Raw(
+		"SELECT EXISTS(SELECT 1 FROM title_on_moderation_tags WHERE title_on_moderation_id = ?)",
+		titleOnModerationID,
+	).Scan(&tagsExist).Error
+
+	if err != nil {
+		return err
+	}
+
+	if !tagsExist {
+		return nil
+	}
+
+	if err := db.Exec("DELETE FROM title_tags WHERE title_id = ?", titleID).Error; err != nil {
+		return err
+	}
+
+	result := db.Exec(
+		`INSERT INTO
+			title_tags (title_id, tag_id)
+		SELECT
+			?, tag_id
+		FROM
+			title_on_moderation_tags
+		WHERE
+			title_on_moderation_id = ?`,
+		titleID, titleOnModerationID,
+	)
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf(
+			"не удалось перенести теги тайтла на модерации созданному тайтлу.\nid тайтла на модерации - %d",
+			titleOnModerationID,
+		)
+
 	}
 
 	return nil

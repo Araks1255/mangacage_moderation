@@ -13,7 +13,11 @@ func (h handler) GetTitlesOnModerationReviewingByMe(c *gin.Context) {
 
 	var result []dto.TitleOnModerationDTO
 
-	err := h.DB.Raw("SELECT * FROM titles_on_moderation WHERE moderator_id = ? ORDER BY id ASC", claims.ID).Scan(&result).Error
+	err := h.DB.Raw(
+		"SELECT id, name FROM titles_on_moderation WHERE moderator_id = ? ORDER BY id ASC LIMIT 100",
+		claims.ID,
+	).Scan(&result).Error
+
 	if err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})

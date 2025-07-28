@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/Araks1255/mangacage/pkg/auth"
+	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
+	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -19,7 +21,11 @@ func (h handler) ReviewTitleOnModeration(c *gin.Context) {
 		return
 	}
 
-	code, err := reviewTitle(h.DB, uint(titleOnModerationID), claims.ID)
+	tx := h.DB.Begin()
+	defer dbUtils.RollbackOnPanic(tx)
+	defer tx.Rollback()
+
+	code, err := reviewTitleOnModeration(h.DB, uint(titleOnModerationID), claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -28,10 +34,12 @@ func (h handler) ReviewTitleOnModeration(c *gin.Context) {
 		return
 	}
 
+	tx.Commit()
+
 	c.JSON(200, gin.H{"success": "тайтл успешно взят вами на рассмотрение"})
 }
 
-func reviewTitle(db *gorm.DB, titleOnModerationID, moderatorID uint) (code int, err error) {
+func reviewTitleOnModeration(db *gorm.DB, titleOnModerationID, moderatorID uint) (code int, err error) {
 	result := db.Exec(
 		"UPDATE titles_on_moderation SET moderator_id = ? WHERE id = ? AND moderator_id IS NULL",
 		moderatorID, titleOnModerationID,
@@ -43,6 +51,12 @@ func reviewTitle(db *gorm.DB, titleOnModerationID, moderatorID uint) (code int, 
 
 	if result.RowsAffected == 0 {
 		return 404, errors.New("заявка не найдена в пуле тайтлов на модерации")
+	}
+
+	err = titles.ReviewTitleOnModerationAuthorOnModeration(db, titleOnModerationID, moderatorID)
+
+	if err != nil {
+		return 500, err
 	}
 
 	return 0, nil

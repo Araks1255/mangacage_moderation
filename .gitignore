@@ -1,3 +1,9 @@
 /pkg/common/envs
 /go.mod
 /go.sum
+/GEMINI.md
+/html
+/static
+/examples
+/test_data
+/pkg/common/seeder

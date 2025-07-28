@@ -28,6 +28,7 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 		chaptersOnModeration.PATCH("/:id/review", h.ReviewChapterOnModeration)
 		chaptersOnModeration.GET("/:id/page/:page", h.GetChapterOnModerationPage)
 		chaptersOnModeration.GET("/reviewing-by-me", h.GetChaptersOnModerationReviewingByMe)
+		chaptersOnModeration.GET("/:id", h.GetChapterOnModeration)
 	}
 
 	chapters := r.Group("/moderation/api/chapters")

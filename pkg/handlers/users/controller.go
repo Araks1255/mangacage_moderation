@@ -28,6 +28,7 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 			usersOnVerification.PATCH("/:id", h.VerificateUser)
 			usersOnVerification.PATCH("/:id/review", h.ReviewUserVerification)
 			usersOnVerification.GET("/reviewing-by-me", h.GetUsersOnVerificationReviewingByMe)
+			usersOnVerification.GET("/:id", h.GetUserOnVerification)
 		}
 
 		profileChanges := users.Group("/profile-changes")
@@ -38,6 +39,7 @@ func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r 
 			profileChanges.PATCH("/:id/review", h.ReviewUserProfileChange)
 			profileChanges.GET("/:id/profile-picture", h.GetUserProfileChangesProfilePicture)
 			profileChanges.GET("/reviewing-by-me", h.GetUserProfileChangesReviewingByMe)
+			profileChanges.GET("/:id", h.GetUserProfileChanges)
 		}
 	}
 }

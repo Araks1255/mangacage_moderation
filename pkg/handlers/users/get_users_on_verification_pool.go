@@ -11,7 +11,7 @@ import (
 func (h handler) GetUsersOnVerificationPool(c *gin.Context) {
 	var params dto.CommonParams
 
-	if err := c.ShouldBindJSON(&params); err != nil {
+	if err := c.ShouldBindQuery(&params); err != nil {
 		c.AbortWithStatusJSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -23,7 +23,7 @@ func (h handler) GetUsersOnVerificationPool(c *gin.Context) {
 
 	query := h.DB.Table("users").
 		Select("*").
-		Where("!verificated").
+		Where("NOT verificated").
 		Where("moderator_id IS NULL").
 		Offset(offset).
 		Limit(int(params.Limit))
@@ -40,7 +40,7 @@ func (h handler) GetUsersOnVerificationPool(c *gin.Context) {
 	case "createdAt":
 		query = query.Order(fmt.Sprintf("id %s", params.Order))
 	default:
-		query = query.Order(fmt.Sprintf("name %s", *params.Query))
+		query = query.Order(fmt.Sprintf("user_name %s", params.Order))
 	}
 
 	var result []dto.ResponseUserDTO

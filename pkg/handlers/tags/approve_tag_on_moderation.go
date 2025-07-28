@@ -50,7 +50,7 @@ func popTagOnModeration(db *gorm.DB, tagOnModerationID, userID uint) (tag *model
 	var result models.TagOnModeration
 
 	err = db.Raw(
-		"DELETE FROM tags_on_moderation WHERE id = ? AND moderator_id = ?",
+		"DELETE FROM tags_on_moderation WHERE id = ? AND moderator_id = ? RETURNING *",
 		tagOnModerationID, userID,
 	).Scan(&result).Error
 

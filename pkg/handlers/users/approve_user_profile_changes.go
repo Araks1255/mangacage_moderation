@@ -9,9 +9,11 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	mongoModels "github.com/Araks1255/mangacage/pkg/common/models/mongo"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
 
@@ -53,7 +55,7 @@ func popUserOnModeration(db *gorm.DB, userOnModerationID, moderatorID uint) (use
 	var result models.UserOnModeration
 
 	err = db.Raw(
-		"DELETE FROM users_on_moderation WHERE id = ? AND moderator_id = ?",
+		"DELETE FROM users_on_moderation WHERE id = ? AND moderator_id = ? RETURNING *",
 		userOnModerationID, moderatorID,
 	).Scan(&result).Error
 
@@ -70,7 +72,7 @@ func popUserOnModeration(db *gorm.DB, userOnModerationID, moderatorID uint) (use
 
 func updateUser(ctx context.Context, db *gorm.DB, collection *mongo.Collection, userOnModeration models.UserOnModeration) error {
 	user := userOnModeration.ToUser()
-	if err := db.Model("users").Updates(&user).Error; err != nil {
+	if err := db.Table("users").Where("id = ?", userOnModeration.ExistingID).Updates(&user).Error; err != nil {
 		return err
 	}
 
@@ -82,25 +84,39 @@ func updateUser(ctx context.Context, db *gorm.DB, collection *mongo.Collection, 
 }
 
 func updateUserProfilePicture(ctx context.Context, collection *mongo.Collection, userOnModerationID, userID uint) error {
-	filter := bson.M{"user_id": userID}
-	if _, err := collection.DeleteOne(ctx, filter); err != nil {
+	userOnModerationFilter := bson.M{"user_on_moderation_id": userOnModerationID}
+
+	var profilePicture mongoModels.UserOnModerationProfilePicture
+
+	if err := collection.FindOne(ctx, userOnModerationFilter).Decode(&profilePicture); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil
+		}
 		return err
 	}
 
-	filter = bson.M{"user_on_moderation_id": userOnModerationID}
-	update := bson.M{
-		"$set":   bson.M{"user_id": userID},
-		"$unset": bson.M{"user_on_moderation_id": userOnModerationID},
-	}
+	userFilter := bson.M{"user_id": userID}
+	userUpdate := bson.M{"$set": bson.M{"profile_picture": profilePicture.ProfilePicture}}
+	userOpts := options.Update().SetUpsert(true) // на всякий случай
 
-	res, err := collection.UpdateOne(ctx, filter, update)
+	res, err := collection.UpdateOne(ctx, userFilter, userUpdate, userOpts)
 
 	if err != nil {
 		return err
 	}
 
 	if res.ModifiedCount == 0 {
-		return nil
+		log.Printf("не удалось изменить аватарку пользователя.\nid пользователя: %d\nid изменений профиля: %d", userID, userOnModerationID)
+	}
+
+	delteRes, err := collection.DeleteOne(ctx, userOnModerationFilter)
+
+	if err != nil {
+		log.Printf("не удалось удалить аватарку изменений профиля.\nошибка: %s\nid: %d", err.Error(), userOnModerationID)
+	}
+
+	if delteRes.DeletedCount == 0 {
+		log.Printf("не удалось удалить аватарку изменений профиля. id: %d", userOnModerationID)
 	}
 
 	return nil
