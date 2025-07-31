@@ -2,6 +2,7 @@ package users
 
 import (
 	"github.com/Araks1255/mangacage/pkg/constants/mongodb"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
@@ -10,14 +11,16 @@ import (
 type handler struct {
 	DB                   *gorm.DB
 	UsersProfilePictures *mongo.Collection
+	NotificationsClient  pb.ModerationNotificationsClient
 }
 
-func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r *gin.Engine) {
+func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, notificationsClient pb.ModerationNotificationsClient, secretKey string, r *gin.Engine) {
 	usersProfilePicturesCollection := mongoClient.Database("mangacage").Collection(mongodb.UsersProfilePicturesCollection)
 
 	h := handler{
 		DB:                   db,
 		UsersProfilePictures: usersProfilePicturesCollection,
+		NotificationsClient:  notificationsClient,
 	}
 
 	users := r.Group("/moderation/api/users")

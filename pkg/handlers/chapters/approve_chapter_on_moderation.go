@@ -9,6 +9,8 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -37,15 +39,17 @@ func (h handler) ApproveChapterOnModeration(c *gin.Context) {
 		return
 	}
 
+	var chapterID uint
+
 	if chapterOnModeration.ExistingID == nil {
-		newChapterID, err := insertChapter(tx, chapterOnModeration.ToChapter())
+		chapterID, err = insertChapter(tx, chapterOnModeration.ToChapter())
 		if err != nil {
 			log.Println(err)
 			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
-		err = replaceChapterPagesChapterOnModerationID(c.Request.Context(), h.ChaptersPages, chapterOnModeration.ID, newChapterID, chapterOnModeration.CreatorID)
+		err = replaceChapterPagesChapterOnModerationID(c.Request.Context(), h.ChaptersPages, chapterOnModeration.ID, chapterID, chapterOnModeration.CreatorID)
 		if err != nil {
 			log.Println(err)
 			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
@@ -59,12 +63,30 @@ func (h handler) ApproveChapterOnModeration(c *gin.Context) {
 			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 			return
 		}
+		chapterID = *chapterOnModeration.ExistingID
 	}
 
 	tx.Commit()
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию главы успешно одобрена"})
-	// Уведомление
+
+	if _, err := h.NotificationsClient.NotifyAboutApprovedModerationRequest(
+		c.Request.Context(), &pb.ApprovedEntity{
+			Entity:    enums.Entity_ENTITY_CHAPTER,
+			ID:        uint64(chapterID),
+			CreatorID: uint64(chapterOnModeration.CreatorID),
+		},
+	); err != nil {
+		log.Println(err)
+	}
+
+	if chapterOnModeration.ExistingID == nil {
+		if _, err := h.NotificationsClient.NotifyAboutNewChapterInTitle(
+			c.Request.Context(), &pb.Chapter{ID: uint64(chapterID)},
+		); err != nil {
+			log.Println(err)
+		}
+	}
 }
 
 func popChapterOnModeration(db *gorm.DB, chapterOnModerationID, userID uint) (chapter *models.ChapterOnModeration, code int, err error) {

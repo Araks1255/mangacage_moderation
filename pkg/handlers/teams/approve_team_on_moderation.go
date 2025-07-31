@@ -10,6 +10,8 @@ import (
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
 	mongoModels "github.com/Araks1255/mangacage/pkg/common/models/mongo"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -39,8 +41,10 @@ func (h handler) ApproveTeamOnModeration(c *gin.Context) {
 		return
 	}
 
+	var teamID uint
+
 	if teamOnModeration.ExistingID == nil {
-		err := createTeam(c.Request.Context(), tx, h.TeamsCovers, *teamOnModeration)
+		teamID, err = createTeam(c.Request.Context(), tx, h.TeamsCovers, *teamOnModeration)
 		if err != nil {
 			log.Println(err)
 			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
@@ -54,12 +58,22 @@ func (h handler) ApproveTeamOnModeration(c *gin.Context) {
 			c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 			return
 		}
+		teamID = *teamOnModeration.ExistingID
 	}
 
 	tx.Commit()
 
 	c.JSON(201, gin.H{"success": "заявка на модерацию команды успешно одобрена"})
-	// Уведомление
+
+	if _, err := h.NotificationsClient.NotifyAboutApprovedModerationRequest(
+		c.Request.Context(), &pb.ApprovedEntity{
+			Entity:    enums.Entity_ENTITY_TEAM,
+			ID:        uint64(teamID),
+			CreatorID: uint64(*teamOnModeration.ExistingID),
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func popTeamOnModeration(db *gorm.DB, teamOnModerationID, userID uint) (team *models.TeamOnModeration, code int, err error) {
@@ -81,21 +95,21 @@ func popTeamOnModeration(db *gorm.DB, teamOnModerationID, userID uint) (team *mo
 	return &result, 0, nil
 }
 
-func createTeam(ctx context.Context, db *gorm.DB, collection *mongo.Collection, teamOnModeration models.TeamOnModeration) error {
+func createTeam(ctx context.Context, db *gorm.DB, collection *mongo.Collection, teamOnModeration models.TeamOnModeration) (uint, error) {
 	newTeamID, err := insertTeam(db, teamOnModeration.ToTeam())
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := makeUserTeamLeader(db, teamOnModeration.CreatorID, newTeamID); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := replaceTeamCoverTeamOnModerationID(ctx, collection, teamOnModeration.ID, newTeamID); err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return newTeamID, nil
 }
 
 func updateTeam(ctx context.Context, db *gorm.DB, collection *mongo.Collection, teamOnModeration models.TeamOnModeration) error {

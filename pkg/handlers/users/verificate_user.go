@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Araks1255/mangacage/pkg/auth"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,4 +32,10 @@ func (h handler) VerificateUser(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"success": "пользователь успешно верифицирован"})
+
+	if _, err := h.NotificationsClient.NotifyUserAboutVerificatedAccount(
+		c.Request.Context(), &pb.VerificatedUser{ID: userID},
+	); err != nil {
+		log.Println(err)
+	}
 }

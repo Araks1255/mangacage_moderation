@@ -6,6 +6,8 @@ import (
 
 	"github.com/Araks1255/mangacage/pkg/auth"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/authors"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,7 +20,7 @@ func (h handler) DeclineAuthorOnModeration(c *gin.Context) {
 		return
 	}
 
-	code, err := authors.DeleteAuthorOnModeration(h.DB, authorOnModerationID, claims.ID)
+	authorOnModeration, code, err := authors.DeleteAuthorOnModeration(h.DB, authorOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -28,8 +30,17 @@ func (h handler) DeclineAuthorOnModeration(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию автора успешно отклонена"})
-	// Уведомление с причиной
-	log.Println(reason)
+
+	if _, err := h.NotificationsClient.SendModerationRequestDeclineReason(
+		c.Request.Context(), &pb.ModerationRequestDeclineReason{
+			EntityOnModeration: enums.EntityOnModeration_ENTITY_ON_MODERATION_AUTHOR,
+			EntityName:         authorOnModeration.Name,
+			CreatorID:          uint64(authorOnModeration.CreatorID),
+			Reason:             reason,
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func parseDeclineAuthorBody(bindFn func(any) error, paramFn func(string) string) (authorID uint, reason string, err error) {

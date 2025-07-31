@@ -8,6 +8,9 @@ import (
 
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
+	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -27,7 +30,7 @@ func (h handler) DeclineChapterOnModeration(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	code, err := deleteChapterOnModeration(tx, chapterOnModerationID, claims.ID)
+	deletedChapterOnModeration, code, err := deleteChapterOnModeration(tx, chapterOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -45,8 +48,22 @@ func (h handler) DeclineChapterOnModeration(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию главы успешно отклонена"})
-	// Уведомление с причиной
-	log.Println(reason)
+
+	var name string
+	if deletedChapterOnModeration.Name != nil {
+		name = *deletedChapterOnModeration.Name
+	}
+
+	if _, err := h.NotificationsClient.SendModerationRequestDeclineReason(
+		c.Request.Context(), &pb.ModerationRequestDeclineReason{
+			EntityOnModeration: enums.EntityOnModeration_ENTITY_ON_MODERATION_CHAPTER,
+			EntityName:         name,
+			CreatorID:          uint64(deletedChapterOnModeration.CreatorID),
+			Reason:             reason,
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func parseDeclineChapterOnModerationBody(bindFn func(any) error, paramFn func(string) string) (chapterID uint, reason string, err error) {
@@ -66,21 +83,23 @@ func parseDeclineChapterOnModerationBody(bindFn func(any) error, paramFn func(st
 	return uint(id), requestBody.Reason, nil
 }
 
-func deleteChapterOnModeration(db *gorm.DB, chapterOnModerationID, userID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM chapters_on_moderation WHERE id = ? AND moderator_id = ?",
+func deleteChapterOnModeration(db *gorm.DB, chapterOnModerationID, userID uint) (deleted *models.ChapterOnModeration, code int, err error) {
+	var deletedChapterOnModeration models.ChapterOnModeration
+
+	err = db.Raw(
+		"DELETE FROM chapters_on_moderation WHERE id = ? AND moderator_id = ? RETURNING id, name, creator_id",
 		chapterOnModerationID, userID,
-	)
+	).Scan(&deletedChapterOnModeration).Error
 
-	if result.Error != nil {
-		return 500, result.Error
+	if err != nil {
+		return nil, 500, err
 	}
 
-	if result.RowsAffected == 0 {
-		return 404, errors.New("глава на модерации не найдена среди рассматриваемых вами")
+	if deletedChapterOnModeration.ID == 0 {
+		return nil, 404, errors.New("глава на модерации не найдена среди рассматриваемых вами")
 	}
 
-	return 0, nil
+	return &deletedChapterOnModeration, 0, nil
 }
 
 func deleteChapterOnModerationPages(ctx context.Context, collection *mongo.Collection, chapterOnModerationID uint) error {

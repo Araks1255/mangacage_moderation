@@ -6,6 +6,9 @@ import (
 	"strconv"
 
 	"github.com/Araks1255/mangacage/pkg/auth"
+	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -19,7 +22,7 @@ func (h handler) DeclineGenreOnModeration(c *gin.Context) {
 		return
 	}
 
-	code, err := deleteGenreOnModeration(h.DB, genreOnModerationID, claims.ID)
+	genreOnModeration, code, err := deleteGenreOnModeration(h.DB, genreOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -29,8 +32,17 @@ func (h handler) DeclineGenreOnModeration(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию жанра успешно отклонена"})
-	// Уведомление с причиной
-	log.Println(reason)
+
+	if _, err := h.NotificationsClient.SendModerationRequestDeclineReason(
+		c.Request.Context(), &pb.ModerationRequestDeclineReason{
+			EntityOnModeration: enums.EntityOnModeration_ENTITY_ON_MODERATION_GENRE,
+			EntityName:         genreOnModeration.Name,
+			CreatorID:          uint64(genreOnModeration.CreatorID),
+			Reason:             reason,
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func parseDeclineGenreOnModerationBody(bindFn func(any) error, paramFn func(string) string) (genreID uint, reason string, err error) {
@@ -50,19 +62,21 @@ func parseDeclineGenreOnModerationBody(bindFn func(any) error, paramFn func(stri
 	return uint(id), requestBody.Reason, nil
 }
 
-func deleteGenreOnModeration(db *gorm.DB, genreOnModerationID, userID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM genres_on_moderation WHERE id = ? AND moderator_id = ?",
+func deleteGenreOnModeration(db *gorm.DB, genreOnModerationID, userID uint) (deleted *models.GenreOnModeration, code int, err error) {
+	var deletedGenreOnModeration models.GenreOnModeration
+
+	err = db.Raw(
+		"DELETE FROM genres_on_moderation WHERE id = ? AND moderator_id = ? RETURNING name, creator_id",
 		genreOnModerationID, userID,
-	)
+	).Scan(&deletedGenreOnModeration).Error
 
-	if result.Error != nil {
-		return 500, result.Error
+	if err != nil {
+		return nil, 500, err
 	}
 
-	if result.RowsAffected == 0 {
-		return 404, errors.New("жанр на модерации не найден среди рассматриваемых вами")
+	if deletedGenreOnModeration.Name == "" {
+		return nil, 404, errors.New("жанр на модерации не найден среди рассматриваемых вами")
 	}
 
-	return 0, nil
+	return &deletedGenreOnModeration, 0, nil
 }

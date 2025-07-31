@@ -9,6 +9,8 @@ import (
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/authors"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -26,7 +28,7 @@ func (h handler) ApproveAuthorOnModeration(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	authorID, code, err := createAuthorFromAuthorOnModerationByID(tx, uint(authorOnModerationID), claims.ID)
+	authorID, creatorID, code, err := createAuthorFromAuthorOnModerationByID(tx, uint(authorOnModerationID), claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -42,7 +44,7 @@ func (h handler) ApproveAuthorOnModeration(c *gin.Context) {
 		return
 	}
 
-	if _, err := authors.DeleteAuthorOnModeration(tx, uint(authorOnModerationID), claims.ID); err != nil {
+	if _, _, err := authors.DeleteAuthorOnModeration(tx, uint(authorOnModerationID), claims.ID); err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 		return
@@ -51,10 +53,19 @@ func (h handler) ApproveAuthorOnModeration(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(201, gin.H{"success": "заявка на модерацию автора успешно одобрена"})
-	// Уведомление
+
+	if _, err := h.NotificationsClient.NotifyAboutApprovedModerationRequest(
+		c.Request.Context(), &pb.ApprovedEntity{
+			Entity:    enums.Entity_ENTITY_AUTHOR,
+			ID:        uint64(authorID),
+			CreatorID: uint64(creatorID),
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
-func createAuthorFromAuthorOnModerationByID(db *gorm.DB, authorOnModerationID, moderatorID uint) (authorID uint, code int, err error) {
+func createAuthorFromAuthorOnModerationByID(db *gorm.DB, authorOnModerationID, moderatorID uint) (authorID, creatorID uint, code int, err error) {
 	var authorOnModeration models.AuthorOnModeration
 
 	err = db.Raw(
@@ -63,20 +74,20 @@ func createAuthorFromAuthorOnModerationByID(db *gorm.DB, authorOnModerationID, m
 	).Scan(&authorOnModeration).Error
 
 	if err != nil {
-		return 0, 500, err
+		return 0, 0, 500, err
 	}
 
 	if authorOnModeration.ID == 0 {
-		return 0, 404, errors.New("автор на модерации не найден среди рассматриваемых вами")
+		return 0, 0, 404, errors.New("автор на модерации не найден среди рассматриваемых вами")
 	}
 
 	newAuthor := authorOnModeration.ToAuthor()
 
 	if err := db.Create(&newAuthor).Error; err != nil {
-		return 0, 500, err
+		return 0, 0, 500, err
 	}
 
-	return newAuthor.ID, 0, nil
+	return newAuthor.ID, authorOnModeration.CreatorID, 0, nil
 }
 
 func replaceTitlesOnModerationAuthorOnModerationID(db *gorm.DB, authorOnModerationID, authorID uint) error {

@@ -3,22 +3,25 @@ package titles
 import (
 	"errors"
 
+	"github.com/Araks1255/mangacage/pkg/common/models"
 	"gorm.io/gorm"
 )
 
-func DeleteTitleOnModeration(db *gorm.DB, titleOnModerationID, moderatorID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM titles_on_moderation WHERE id = ? AND moderator_id = ?",
+func DeleteTitleOnModeration(db *gorm.DB, titleOnModerationID, moderatorID uint) (deleted *models.TitleOnModeration, code int, err error) {
+	var deletedTitleOnModeration models.TitleOnModeration
+
+	err = db.Raw(
+		"DELETE FROM titles_on_moderation WHERE id = ? AND moderator_id = ? RETURNING id, name, creator_id",
 		titleOnModerationID, moderatorID,
-	)
+	).Scan(&deletedTitleOnModeration).Error
 
-	if result.Error != nil {
-		return 500, result.Error
+	if err != nil {
+		return nil, 500, err
 	}
 
-	if result.RowsAffected == 0 {
-		return 404, errors.New("тайтл на модерации не найден среди рассматриваемых вами")
+	if deletedTitleOnModeration.ID == 0 {
+		return nil, 404, errors.New("тайтл на модерации не найден среди рассматриваемых вами")
 	}
 
-	return 0, nil
+	return &deletedTitleOnModeration, 0, nil
 }

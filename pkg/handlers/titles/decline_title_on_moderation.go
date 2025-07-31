@@ -8,6 +8,8 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -26,7 +28,7 @@ func (h handler) DeclineTitleOnModeration(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	code, err := titles.DeleteTitleOnModeration(tx, titleOnModerationID, claims.ID)
+	titleOnModeration, code, err := titles.DeleteTitleOnModeration(tx, titleOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -44,8 +46,17 @@ func (h handler) DeclineTitleOnModeration(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию тайтла успешно отклонена"})
-	// Уведомление с причиной
-	log.Println(reason)
+
+	if _, err := h.NotificationsClient.SendModerationRequestDeclineReason(
+		c.Request.Context(), &pb.ModerationRequestDeclineReason{
+			EntityOnModeration: enums.EntityOnModeration_ENTITY_ON_MODERATION_TITLE,
+			EntityName:         *titleOnModeration.Name,
+			CreatorID:          uint64(titleOnModeration.CreatorID),
+			Reason:             reason,
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func parseDeclineTitleBody(bindFn func(any) error, paramFn func(string) string) (titleID uint, reason string, err error) {

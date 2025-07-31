@@ -8,6 +8,8 @@ import (
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -34,7 +36,8 @@ func (h handler) ApproveTagOnModeration(c *gin.Context) {
 		return
 	}
 
-	if err := createTag(tx, tagOnModeration.ToTag()); err != nil {
+	tagID, err := createTag(tx, tagOnModeration.ToTag())
+	if err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 		return
@@ -43,7 +46,16 @@ func (h handler) ApproveTagOnModeration(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(201, gin.H{"success": "заявка на модерацию тега успешно одобрена"})
-	// Уведомление
+
+	if _, err := h.NotificationsClient.NotifyAboutApprovedModerationRequest(
+		c.Request.Context(), &pb.ApprovedEntity{
+			Entity:    enums.Entity_ENTITY_TAG,
+			ID:        uint64(tagID),
+			CreatorID: uint64(tagOnModeration.CreatorID),
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func popTagOnModeration(db *gorm.DB, tagOnModerationID, userID uint) (tag *models.TagOnModeration, code int, err error) {
@@ -65,6 +77,7 @@ func popTagOnModeration(db *gorm.DB, tagOnModerationID, userID uint) (tag *model
 	return &result, 0, nil
 }
 
-func createTag(db *gorm.DB, tag models.Tag) error {
-	return db.Create(&tag).Error
+func createTag(db *gorm.DB, tag models.Tag) (uint, error) {
+	err := db.Create(&tag).Error
+	return tag.ID, err
 }

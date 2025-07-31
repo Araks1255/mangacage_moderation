@@ -8,6 +8,9 @@ import (
 
 	"github.com/Araks1255/mangacage/pkg/auth"
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
+	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -27,7 +30,7 @@ func (h handler) DeclineTeamOnModeration(c *gin.Context) {
 	defer dbUtils.RollbackOnPanic(tx)
 	defer tx.Rollback()
 
-	code, err := deleteTeamOnModeration(tx, teamOnModerationID, claims.ID)
+	teamOnModeration, code, err := deleteTeamOnModeration(tx, teamOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -45,8 +48,22 @@ func (h handler) DeclineTeamOnModeration(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию команды успешно отклонена"})
-	// Уведомление с причиной
-	log.Println(reason)
+
+	var name string
+	if teamOnModeration.Name != nil {
+		name = *teamOnModeration.Name
+	}
+
+	if _, err := h.NotificationsClient.SendModerationRequestDeclineReason(
+		c.Request.Context(), &pb.ModerationRequestDeclineReason{
+			EntityOnModeration: enums.EntityOnModeration_ENTITY_ON_MODERATION_CHAPTER,
+			EntityName:         name,
+			CreatorID:          uint64(teamOnModeration.CreatorID),
+			Reason:             reason,
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func parseDeclineTeamBody(bindFn func(any) error, paramFn func(string) string) (teamID uint, reason string, err error) {
@@ -66,21 +83,23 @@ func parseDeclineTeamBody(bindFn func(any) error, paramFn func(string) string) (
 	return uint(id), requestBody.Reason, nil
 }
 
-func deleteTeamOnModeration(db *gorm.DB, teamOnModerationID, userID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM teams_on_moderation WHERE id = ? AND moderator_id = ?",
+func deleteTeamOnModeration(db *gorm.DB, teamOnModerationID, userID uint) (deleted *models.TeamOnModeration, code int, err error) {
+	var deletedTeamOnModeration models.TeamOnModeration
+
+	err = db.Raw(
+		"DELETE FROM teams_on_moderation WHERE id = ? AND moderator_id = ? RETURNING id, name, creator_id",
 		teamOnModerationID, userID,
-	)
+	).Scan(&deletedTeamOnModeration).Error
 
-	if result.Error != nil {
-		return 500, result.Error
+	if err != nil {
+		return nil, 500, err
 	}
 
-	if result.RowsAffected == 0 {
-		return 404, errors.New("команда на модерации не найдена среди рассматриваемых вами")
+	if deletedTeamOnModeration.ID == 0 {
+		return nil, 404, errors.New("команда на модерации не найдена среди рассматриваемых вами")
 	}
 
-	return 0, nil
+	return &deletedTeamOnModeration, 0, nil
 }
 
 func deleteTeamOnModerationCover(ctx context.Context, collection *mongo.Collection, teamOnModerationID uint) error {

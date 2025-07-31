@@ -1,17 +1,20 @@
 package authors
 
 import (
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 type handler struct {
-	DB *gorm.DB
+	DB                  *gorm.DB
+	NotificationsClient pb.ModerationNotificationsClient
 }
 
-func RegisterRoutes(db *gorm.DB, secretKey string, r *gin.Engine) {
+func RegisterRoutes(db *gorm.DB, secretKey string, notificationsClient pb.ModerationNotificationsClient, r *gin.Engine) {
 	h := handler{
-		DB: db,
+		DB:                  db,
+		NotificationsClient: notificationsClient,
 	}
 
 	authorsOnModeration := r.Group("/moderation/api/authors-on-moderation")

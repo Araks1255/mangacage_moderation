@@ -6,6 +6,9 @@ import (
 	"strconv"
 
 	"github.com/Araks1255/mangacage/pkg/auth"
+	"github.com/Araks1255/mangacage/pkg/common/models"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -19,7 +22,7 @@ func (h handler) DeclineTagOnModeration(c *gin.Context) {
 		return
 	}
 
-	code, err := deleteTagOnModeration(h.DB, tagOnModerationID, claims.ID)
+	tagOnModeration, code, err := deleteTagOnModeration(h.DB, tagOnModerationID, claims.ID)
 	if err != nil {
 		if code == 500 {
 			log.Println(err)
@@ -29,8 +32,17 @@ func (h handler) DeclineTagOnModeration(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию тега успешно отклонена"})
-	// Уведомление с причиной
-	log.Println(reason)
+
+	if _, err := h.NotificationsClient.SendModerationRequestDeclineReason(
+		c.Request.Context(), &pb.ModerationRequestDeclineReason{
+			EntityOnModeration: enums.EntityOnModeration_ENTITY_ON_MODERATION_TAG,
+			EntityName:         tagOnModeration.Name,
+			CreatorID:          uint64(tagOnModeration.CreatorID),
+			Reason:             reason,
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func parseDeclineTagBody(bindFn func(any) error, paramFn func(string) string) (tagID uint, reason string, err error) {
@@ -50,19 +62,21 @@ func parseDeclineTagBody(bindFn func(any) error, paramFn func(string) string) (t
 	return uint(id), requestBody.Reason, nil
 }
 
-func deleteTagOnModeration(db *gorm.DB, tagOnModerationID, userID uint) (code int, err error) {
-	result := db.Exec(
-		"DELETE FROM tags_on_moderation WHERE id = ? AND moderator_id = ?",
+func deleteTagOnModeration(db *gorm.DB, tagOnModerationID, userID uint) (deleted *models.TagOnModeration, code int, err error) {
+	var deletedTagOnModeration models.TagOnModeration
+
+	err = db.Raw(
+		"DELETE FROM tags_on_moderation WHERE id = ? AND moderator_id = ? RETURNING name, creator_id",
 		tagOnModerationID, userID,
-	)
+	).Scan(&deletedTagOnModeration).Error
 
-	if result.Error != nil {
-		return 500, result.Error
+	if err != nil {
+		return nil, 500, err
 	}
 
-	if result.RowsAffected == 0 {
-		return 404, errors.New("тег на модерации не найден среди рассматриваемых вами")
+	if deletedTagOnModeration.Name == "" {
+		return nil, 404, errors.New("тег на модерации не найден среди рассматриваемых вами")
 	}
 
-	return 0, nil
+	return &deletedTagOnModeration, 0, nil
 }

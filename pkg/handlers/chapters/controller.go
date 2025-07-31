@@ -2,22 +2,25 @@ package chapters
 
 import (
 	"github.com/Araks1255/mangacage/pkg/constants/mongodb"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
 
 type handler struct {
-	DB            *gorm.DB
-	ChaptersPages *mongo.Collection
+	DB                  *gorm.DB
+	ChaptersPages       *mongo.Collection
+	NotificationsClient pb.ModerationNotificationsClient
 }
 
-func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, secretKey string, r *gin.Engine) {
+func RegisterRoutes(db *gorm.DB, mongoClient *mongo.Client, notificationsClient pb.ModerationNotificationsClient, secretKey string, r *gin.Engine) {
 	chaptersPagesCollection := mongoClient.Database("mangacage").Collection(mongodb.ChaptersPagesCollection)
 
 	h := handler{
-		DB:            db,
-		ChaptersPages: chaptersPagesCollection,
+		DB:                  db,
+		ChaptersPages:       chaptersPagesCollection,
+		NotificationsClient: notificationsClient,
 	}
 
 	chaptersOnModeration := r.Group("/moderation/api/chapters-on-moderation")

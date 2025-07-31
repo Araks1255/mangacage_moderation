@@ -12,6 +12,8 @@ import (
 	"github.com/Araks1255/mangacage/pkg/common/models"
 	mongoModels "github.com/Araks1255/mangacage/pkg/common/models/mongo"
 	"github.com/Araks1255/mangacage_moderation/pkg/handlers/helpers/titles"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -41,10 +43,13 @@ func (h handler) ApproveTitleOnModeration(c *gin.Context) {
 		return
 	}
 
+	var titleID uint
+
 	if titleOnModeration.ExistingID == nil {
-		err = createTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
+		titleID, err = createTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
 	} else {
 		err = updateTitle(c.Request.Context(), tx, h.TitlesCovers, *titleOnModeration)
+		titleID = *titleOnModeration.ExistingID
 	}
 
 	if err != nil {
@@ -53,7 +58,7 @@ func (h handler) ApproveTitleOnModeration(c *gin.Context) {
 		return
 	}
 
-	if _, err := titles.DeleteTitleOnModeration(tx, uint(titleOnModerationID), claims.ID); err != nil {
+	if _, _, err := titles.DeleteTitleOnModeration(tx, uint(titleOnModerationID), claims.ID); err != nil {
 		log.Println(err)
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
 		return
@@ -62,7 +67,16 @@ func (h handler) ApproveTitleOnModeration(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(200, gin.H{"success": "заявка на модерацию тайтла успешно одобрена"})
-	// Уведомление
+
+	if _, err := h.NotificationsClient.NotifyAboutApprovedModerationRequest(
+		c.Request.Context(), &pb.ApprovedEntity{
+			Entity:    enums.Entity_ENTITY_TITLE,
+			ID:        uint64(titleID),
+			CreatorID: uint64(titleOnModeration.CreatorID),
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func getTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (title *models.TitleOnModeration, code int, err error) {
@@ -88,33 +102,33 @@ func getTitleOnModeration(db *gorm.DB, titleOnModerationID, userID uint) (title 
 	return &result, 0, nil
 }
 
-func createTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) error {
+func createTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) (uint, error) {
 	newTitleID, err := insertTitle(db, titleOnModeration.ToTitle())
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if err = setTitleGenresFromTitleOnModeration(db, newTitleID, titleOnModeration.ID); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := setTitleTagsFromTitleOnModeration(db, newTitleID, titleOnModeration.ID); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err = replaceChaptersOnModerationTitleOnModerationID(db, titleOnModeration.ID, newTitleID); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := makeTitleTranslatingByCreatorTeam(db, newTitleID, titleOnModeration.CreatorID); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err = replaceTitleCoverTitleOnModerationID(ctx, collection, titleOnModeration.ID, newTitleID); err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return newTitleID, nil
 }
 
 func updateTitle(ctx context.Context, db *gorm.DB, collection *mongo.Collection, titleOnModeration models.TitleOnModeration) error {

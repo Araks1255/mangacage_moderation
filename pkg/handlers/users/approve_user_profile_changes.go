@@ -10,6 +10,8 @@ import (
 	dbUtils "github.com/Araks1255/mangacage/pkg/common/db/utils"
 	"github.com/Araks1255/mangacage/pkg/common/models"
 	mongoModels "github.com/Araks1255/mangacage/pkg/common/models/mongo"
+	"github.com/Araks1255/mangacage_protos/gen/enums"
+	pb "github.com/Araks1255/mangacage_protos/gen/moderation_notifications"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -48,7 +50,15 @@ func (h handler) ApproveUserProfileChanges(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(201, gin.H{"success": "изменения профиля пользователя успешно одобрены"})
-	// Уведомление
+
+	if _, err := h.NotificationsClient.NotifyAboutApprovedModerationRequest(
+		c.Request.Context(), &pb.ApprovedEntity{
+			Entity:    enums.Entity_ENTITY_PROFILE,
+			CreatorID: uint64(*userOnModeration.ExistingID),
+		},
+	); err != nil {
+		log.Println(err)
+	}
 }
 
 func popUserOnModeration(db *gorm.DB, userOnModerationID, moderatorID uint) (userOnModeration *models.UserOnModeration, code int, err error) {
